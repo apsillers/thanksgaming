@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser-arcade-physics.min.js"></script>
+</head>
+<body>
+<div style="position: absolute; bottom:0; z-index:2;">
+<details>
+<summary>Credits</summary>
+<p>World and player art taken from <a href=https://phaser.io/tutorials/making-your-first-phaser-3-game>the official Phaser 3 tutorial</a><p>
+<p>Food art by <a href=https://henrysoftware.itch.io/pixel-food>Henry Software</a></p>
+<p>Jump and collect sounds by <a href=https://opengameart.org/content/8-bit-jump-1</a>jalastram</a></p>
+</details>
+</div>
+<script>
+	var config = {
+		type: Phaser.AUTO,
+		width: 800,
+		height: 600,
+		input: {
+            gamepad: true
+        },
+		scene: {
+			preload: preload,
+			create: create,
+			update: update
+		},
+		physics: {
+      		default: 'arcade',
+		    arcade: {
+                gravity: { y: 300 },
+                debug: false
+            }
+		}
+	};
+
+	var game = new Phaser.Game(config);
+    var cursors, keys;
+
+	function preload () {
+	console.log(this.input)
+	    this.load.image('sky', 'assets/sky.png');
+        this.load.image('ground', 'assets/platform.png');
+        this.load.image('star', 'assets/star.png');
+        this.load.image('bomb', 'assets/bomb.png');
+        this.load.spritesheet('dude', 
+            'assets/dude.png',
+            { frameWidth: 32, frameHeight: 48 }
+        );
+		this.load.spritesheet('food', 
+            'assets/food.png',
+            { frameWidth: 16, frameHeight: 16 }
+        );
+		this.load.audio('jump', 'assets/jump.wav');
+		this.load.audio('collect', 'assets/collect.wav');
+	}
+
+	function create () {
+    	this.add.image(400, 300, 'sky');
+		platforms = this.physics.add.staticGroup();
+
+        platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+
+        platforms.create(600, 400, 'ground');
+        window.floaty = platforms.create(50, 250, 'ground');
+        platforms.create(750, 220, 'ground');
+		
+		players = [{ sprite: this.physics.add.sprite(100, 450, 'dude') }, { sprite: this.physics.add.sprite(200, 450, 'dude') }];
+
+		players.forEach(p=>{
+		    p.sprite.setBounce(0.2);
+		    p.sprite.setCollideWorldBounds(true);
+			this.physics.add.collider(p.sprite, platforms);
+		})
+        this.physics.add.collider(players[0].sprite, players[1].sprite);
+
+		this.triggerTimer = this.time.addEvent({
+            callback: createFood,
+            callbackScope: this,
+            delay: 1000
+        });
+
+		this.anims.create({
+			key: 'left',
+			frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
+			frameRate: 10,
+			repeat: -1
+		});
+
+		this.anims.create({
+			key: 'turn',
+			frames: [ { key: 'dude', frame: 4 } ],
+			frameRate: 20
+		});
+
+		this.anims.create({
+			key: 'right',
+			frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
+			frameRate: 10,
+			repeat: -1
+		});
+		
+		cursors = this.input.keyboard.createCursorKeys();
+		keys = this.input.keyboard.addKeys("W,A,S,D")
+		
+	}
+
+    function createFood() {
+	    var options = [5, 50, 36, 38, 15]
+	    var food = this.physics.add.sprite(20+Math.random()*780, 40+Math.random()*400, 'food', options[Phaser.Math.Between(0,4)]);
+		food.setScale(1.5);
+		this.physics.add.collider(food, platforms);
+		this.physics.add.collider(players[0].sprite, food, eatFood.bind(this));
+		this.physics.add.collider(players[1].sprite, food, eatFood.bind(this));
+		this.triggerTimer.reset({ delay: Phaser.Math.Between(3000,8000), callback: createFood, callbackScope: this, repeat:1 });
+	}
+	
+	function eatFood(player, food) {
+	    this.sound.play("collect");
+	    food.destroy();
+	}
+
+	function update () {
+	    movePlayer.call(this, players[0], 0, cursors.left.isDown, cursors.right.isDown, cursors.up.isDown);
+		movePlayer.call(this, players[1], 1, keys.A.isDown, keys.D.isDown, keys.W.isDown);
+		
+		//floaty.dy
+	}
+	    
+	function movePlayer(player, padnum, left, right, up) {
+	    var sprite = player.sprite;
+	    var goLeft = left;
+		var goRight = right;
+		var goUp = up;
+		
+		var pad = this.input.gamepad && this.input.gamepad.getPad(padnum);
+		//console.log(this.input.gamepad.getPad(padnum));
+		if (pad) {
+			var xaxis = pad.axes[0].getValue();
+			var xaxis2 = pad.axes[2].getValue();
+			var jump = pad.buttons[0].value;
+
+			if(xaxis > 0.5 || xaxis2 > 0.5) { goRight = true; }
+			if(xaxis < -0.5 || xaxis2 < -0.5) { goLeft = true; }
+			if(jump) { goUp = true; }
+		}	
+		
+		if(goLeft) {
+			sprite.setVelocityX(-160);
+			sprite.anims.play('left', true);
+		}
+		else if (goRight) {
+			sprite.setVelocityX(160);
+			sprite.anims.play('right', true);
+		}
+		else {
+			sprite.setVelocityX(0);
+			sprite.anims.play('turn');
+		}
+
+		if (goUp && sprite.body.touching.down) {
+			sprite.setVelocityY(-330);
+			this.sound.play("jump");
+		}
+	}
+</script>
+
+</body>
+</html>
