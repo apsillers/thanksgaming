@@ -2,6 +2,7 @@
 <html>
 <head>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser-arcade-physics.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/gh/cgarciagl/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
 <div style="position: absolute; bottom:0; z-index:2;">
@@ -12,7 +13,67 @@
 <p>Jump and collect sounds by <a href=https://opengameart.org/content/8-bit-jump-1</a>jalastram</a></p>
 </details>
 </div>
+
+<div id="video" style="position: absolute; left:0; top:0; z-index:2;">
+<button id="startface">Start Face Input</button>
+<div>
+
 <script>
+
+    startface.onclick = async function() {
+		await faceapi.loadTinyFaceDetectorModel('https://cdn.jsdelivr.net/gh/cgarciagl/face-api.js@0.22.2/weights');
+		await faceapi.loadFaceLandmarkModel('https://cdn.jsdelivr.net/gh/cgarciagl/face-api.js@0.22.2/weights');
+		const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+		const videoEl = document.createElement("video");
+		document.body.appendChild(videoEl);
+		videoEl.style.position = "fixed";
+		videoEl.style.top = "0px";
+		videoEl.style.right = "0px";
+		videoEl.style.width = "30%";
+		videoEl.style.height = "30%";
+		videoEl.style.transform = "scaleX(-1)";
+		videoEl.srcObject = stream;
+		videoEl.play();
+		videoEl.addEventListener("loadedmetadata", async function onPlay() {
+		  if(videoEl.paused || videoEl.ended || !faceapi.nets.tinyFaceDetector.params)
+			return requestAnimationFrame(onPlay);
+
+		  const rList = await faceapi.detectAllFaces(videoEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 })).withFaceLandmarks();
+
+		  window.faceList = [];
+		  for (var i in rList) {
+			var r = rList[i];
+		  
+			faceList[i] = {};
+		  
+			var topLip = r.landmarks.positions[62],
+				bottomLip = r.landmarks.positions[66],
+				leftLip = r.landmarks.positions[48],
+				rightLip = r.landmarks.positions[54],
+				noseTop = r.unshiftedLandmarks.positions[27],
+				noseBottom = r.unshiftedLandmarks.positions[30],
+				leftSide = r.unshiftedLandmarks.positions[2],
+				rightSide = r.unshiftedLandmarks.positions[14],
+				leftEnd = r.unshiftedLandmarks.positions[0],
+				rightEnd = r.unshiftedLandmarks.positions[16],
+				browLeft = r.unshiftedLandmarks.positions[19],
+				browRight = r.unshiftedLandmarks.positions[24];
+
+			faceList[i].skew = (leftEnd.y - rightEnd.y) / r.alignedRect.box.height;
+
+			faceList[i].mouthOpenRatio = Math.sqrt(
+            (topLip.x - bottomLip.x)**2 +
+            (topLip.y - bottomLip.y)**2
+        ) / r.alignedRect.box.height;
+
+		  }
+
+          requestAnimationFrame(onPlay);
+        });
+	}
+
+
+
 	var config = {
 		type: Phaser.AUTO,
 		width: 800,
@@ -38,7 +99,6 @@
     var cursors, keys;
 
 	function preload () {
-	console.log(this.input)
 	    this.load.image('sky', 'assets/sky.png');
         this.load.image('ground', 'assets/platform.png');
         this.load.image('star', 'assets/star.png');
@@ -101,12 +161,13 @@
 		});
 		
 		cursors = this.input.keyboard.createCursorKeys();
-		keys = this.input.keyboard.addKeys("W,A,S,D")
+		keys = this.input.keyboard.addKeys("W,A,S,D");
 		
 	}
 
     function createFood() {
-	    var options = [5, 50, 36, 38, 15]
+	    var options = [5, 25, 36, 38, 15,
+		               34, 23, 10, 42]
 	    var food = this.physics.add.sprite(20+Math.random()*780, 40+Math.random()*400, 'food', options[Phaser.Math.Between(0,4)]);
 		food.setScale(1.5);
 		this.physics.add.collider(food, platforms);
@@ -133,6 +194,7 @@
 		var goRight = right;
 		var goUp = up;
 		
+		// read gamepad state
 		var pad = this.input.gamepad && this.input.gamepad.getPad(padnum);
 		//console.log(this.input.gamepad.getPad(padnum));
 		if (pad) {
@@ -144,6 +206,19 @@
 			if(xaxis < -0.5 || xaxis2 < -0.5) { goLeft = true; }
 			if(jump) { goUp = true; }
 		}	
+		
+		
+		//read face state
+		if(window.faceList && faceList[padnum]) {
+			if(faceList[padnum].mouthOpenRatio > 0.08) { goUp = true; }
+			else { goUp = false; }
+			
+			var skew = faceList[padnum].skew;
+			if(skew > 0.15) { goRight = true; }
+			else { goRight = false; }
+			if(skew < -0.15) { goLeft = true; }
+			else { goLeft = false; }
+		}
 		
 		if(goLeft) {
 			sprite.setVelocityX(-160);
