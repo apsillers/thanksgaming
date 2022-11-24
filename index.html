@@ -38,7 +38,7 @@
 		  if(videoEl.paused || videoEl.ended || !faceapi.nets.tinyFaceDetector.params)
 			return requestAnimationFrame(onPlay);
 
-		  const rList = await faceapi.detectAllFaces(videoEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 })).withFaceLandmarks();
+		  const rList = await faceapi.detectAllFaces(videoEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 320 })).withFaceLandmarks();
 
 		  window.faceList = [];
 		  for (var i in rList) {
